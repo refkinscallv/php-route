@@ -1,0 +1,23 @@
+{
+    "name": "refkinscallv/php-route",
+    "description": "PHP Routing Library provides a flexible and easy-to-use routing system for PHP applications",
+    "version": "1.0.0",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "RFRoute\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Refkinscallv",
+            "email": "refkinscallv@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "psr/http-message": "^2.0",
+        "guzzlehttp/psr7": "^2.8"
+    }
+}

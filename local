@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+$host = '127.0.0.1';
+$port = 8000;
+$root = __DIR__ . '/example';
+
+foreach ($argv as $arg) {
+    if (str_starts_with($arg, '--port=')) {
+        $port = (int) substr($arg, 7);
+    } elseif (str_starts_with($arg, '--host=')) {
+        $host = substr($arg, 7);
+    } elseif (str_starts_with($arg, '--root=')) {
+        $root = substr($arg, 7);
+    }
+}
+
+if (empty($root)) {
+    $root = __DIR__;
+}
+
+if (!is_dir($root)) {
+    mkdir($root, 0755, true);
+}
+
+$root = rtrim($root, DIRECTORY_SEPARATOR);
+
+echo "Starting PHP built-in server at http://$host:$port\n";
+echo "Document root: $root\n";
+echo "Press Ctrl+C to stop the server.\n";
+
+$cmd = "php -S $host:$port -t \"$root\"";
+
+if (strncasecmp(PHP_OS, 'WIN', 3) === 0) {
+    pclose(popen("start /B $cmd", "r"));
+} else {
+    passthru($cmd);
+}
