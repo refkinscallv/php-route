@@ -4,7 +4,6 @@ namespace RFRoute\Route;
 
 use RFRoute\Http\Request;
 use RFRoute\Http\Response;
-use Throwable;
 
 class Route
 {
@@ -20,6 +19,19 @@ class Route
     private static function normalizePath(string $path): string
     {
         return '/' . implode('/', array_filter(explode('/', $path)));
+    }
+
+    private static function normalizeUri(string $uri): string
+    {
+        $parts = explode('/', $uri);
+        $clean = [];
+        foreach ($parts as $i => $p) {
+            if ($p === '' && $i !== 0 && $i !== count($parts) - 1) {
+                continue;
+            }
+            $clean[] = $p;
+        }
+        return '/' . implode('/', array_filter($clean, fn($p) => $p !== '' || $p === '0'));
     }
 
     public static function setErrorHandler(callable $handler)
@@ -45,12 +57,30 @@ class Route
     public static function add(string|array $methods, string $path, callable|array $handler, array $middlewares = [])
     {
         $methods = is_array($methods) ? $methods : [$methods];
-        $fullPath = self::normalizePath(self::$prefix . '/' . $path);
+        $fullPath = rtrim(self::$prefix . '/' . ltrim($path, '/'), '/');
+        if ($fullPath === '') $fullPath = '/';
+
+        $regex = preg_replace_callback(
+            '/\{(\??)([a-zA-Z_][a-zA-Z0-9_]*)(?::([^}]+))?\}/',
+            function ($m) {
+                $optional = $m[1] === '?';
+                $name     = $m[2];
+                $pattern  = $m[3] ?? '[^/]+';
+                if ($optional) {
+                    return "(?:/(?P<$name>$pattern))?";
+                }
+                return "(?P<$name>$pattern)";
+            },
+            $fullPath
+        );
+
+        $regex = '#^' . $regex . '$#';
 
         self::$routes[] = [
-            'methods' => $methods,
-            'path' => $fullPath,
-            'handler' => $handler,
+            'methods'     => $methods,
+            'path'        => $fullPath,
+            'regex'       => $regex,
+            'handler'     => $handler,
             'middlewares' => array_merge(self::$globalMiddlewares, self::$groupMiddlewares, $middlewares),
         ];
     }
@@ -71,12 +101,9 @@ class Route
     {
         $prevPrefix = self::$prefix;
         $prevGroup = self::$groupMiddlewares;
-
         self::$prefix = self::normalizePath($prevPrefix . '/' . $prefix);
         self::$groupMiddlewares = array_merge($prevGroup, $middlewares);
-
         $callback();
-
         self::$prefix = $prevPrefix;
         self::$groupMiddlewares = $prevGroup;
     }
@@ -85,9 +112,7 @@ class Route
     {
         $prevGlobal = self::$globalMiddlewares;
         self::$globalMiddlewares = array_merge($prevGlobal, $middlewares);
-
         $callback();
-
         self::$globalMiddlewares = $prevGlobal;
     }
 
@@ -109,13 +134,15 @@ class Route
         try {
             foreach (self::$routes as $route) {
                 if (!in_array($method, $route['methods'])) continue;
-                if ($route['path'] !== self::normalizePath($uri)) continue;
-
+                if (!preg_match($route['regex'], self::normalizeUri($uri), $matches)) continue;
+                $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
+                foreach ($params as $k => $v) {
+                    $req = $req->withAttribute($k, $v);
+                }
                 foreach ($route['middlewares'] as $middleware) {
                     $result = $middleware($req, $res);
                     if ($result === false) return;
                 }
-
                 $handler = $route['handler'];
                 if (is_callable($handler)) {
                     $handler($req, $res);
@@ -130,16 +157,13 @@ class Route
                 } else {
                     throw new \RuntimeException("Invalid handler for route {$route['path']}");
                 }
-
                 exit;
             }
-
             if (self::$notFoundHandler) {
                 call_user_func(self::$notFoundHandler, $req, $res);
             } else {
                 $res->send("Route not found: $uri", 404);
             }
-
         } catch (\Throwable $e) {
             if (self::$errorHandler) {
                 call_user_func(self::$errorHandler, $e, $req, $res);
@@ -147,8 +171,6 @@ class Route
                 $res->send("Internal Server Error: " . $e->getMessage(), 500);
             }
         }
-
         exit;
     }
-
 }

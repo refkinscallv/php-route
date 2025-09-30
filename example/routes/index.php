@@ -110,5 +110,23 @@ Route::middleware([
     Route::get('/controller/show', [SampleController::class, 'show']);
 });
 
+// Param biasa
+Route::get('/user/{id}', function($req, $res) {
+    $res->send("User ID: " . $req->getAttribute('id') ?? 1);
+});
+
+// Param optional
+Route::get('/post/{slug}/{page}', function($req, $res) {
+    $res->json([
+        "slug" => $req->getAttribute('slug'),
+        "page" => $req->getAttribute('page') ?? 1,
+    ]);
+});
+
+// Param dengan regex
+Route::get('/order/{id:\d+}', function($req, $res) {
+    $res->send("Order ID (numeric): " . $req->getAttribute('id'));
+});
+
 // --- DISPATCH ---
 Route::dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);
