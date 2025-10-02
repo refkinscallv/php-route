@@ -1,7 +1,7 @@
 {
     "name": "refkinscallv/php-route",
     "description": "PHP Routing Library provides a flexible and easy-to-use routing system for PHP applications",
-    "version": "1.0.0",
+    "version": "1.0.5",
     "type": "library",
     "license": "MIT",
     "autoload": {

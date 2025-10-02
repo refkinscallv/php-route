@@ -1,0 +1,29 @@
+name: Update Packagist
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+
+jobs:
+  update-packagist-main:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Packagist Update (Main Project)
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"repository\":{\"url\":\"https://github.com/${{ github.repository }}\"}}" \
+            "https://packagist.org/api/update-package?username=${{ github.actor }}&apiToken=${{ secrets.PACKAGIST_TOKEN_MAIN }}"
+
+  update-packagist-safe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Packagist Update (Safe Project)
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d "{\"repository\":{\"url\":\"https://github.com/${{ github.repository }}\"}}" \
+            "https://packagist.org/api/update-package?username=${{ github.actor }}&apiToken=${{ secrets.PACKAGIST_TOKEN_SAFE }}"
