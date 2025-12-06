@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * refkinscallv/php-route
  * PHP Routing Library provides a flexible and easy-to-use routing system
- * Version: 1.0.6 | License: MIT
+ * Version: 1.0.7 | License: MIT
  * Author: Refkinscallv <refkinscallv@gmail.com>
  * --------------------------------------------------------------------------
  */

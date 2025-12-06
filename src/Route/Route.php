@@ -3,7 +3,7 @@
  * --------------------------------------------------------------------------
  * refkinscallv/php-route
  * PHP Routing Library provides a flexible and easy-to-use routing system
- * Version: 1.0.6 | License: MIT
+ * Version: 1.0.7 | License: MIT
  * Author: Refkinscallv <refkinscallv@gmail.com>
  * --------------------------------------------------------------------------
  */
@@ -41,6 +41,53 @@ class Route
         }
         return '/' . implode('/', array_filter($clean, fn($p) => $p !== '' || $p === '0'));
     }
+    
+    private static function executeMiddlewareWithRequest($middleware, Request $req, Response $res): array
+    {
+        $result = self::executeMiddleware($middleware, $req, $res);
+        return [
+            'stop' => !$result,
+            'request' => $req
+        ];
+    }
+    
+    private static function executeMiddleware($middleware, Request $req, Response $res): bool
+    {
+        if (is_callable($middleware) && !is_array($middleware) && !is_string($middleware)) {
+            $result = $middleware($req, $res);
+            return $result !== false;
+        }
+
+        if (is_string($middleware) && strpos($middleware, '@') !== false) {
+            [$class, $method] = explode('@', $middleware);
+            if (method_exists($class, $method)) {
+                $result = $class::$method($req, $res);
+                return $result !== false;
+            }
+            throw new \RuntimeException("Method $method not found in class $class");
+        }
+
+        if (is_array($middleware) && count($middleware) === 2) {
+            [$handler, $method] = $middleware;
+            
+            if (is_object($handler)) {
+                if (method_exists($handler, $method)) {
+                    $result = $handler->$method($req, $res);
+                    return $result !== false;
+                }
+                throw new \RuntimeException("Method $method not found in object");
+            }
+
+            if (is_string($handler) && method_exists($handler, $method)) {
+                $result = $handler::$method($req, $res);
+                return $result !== false;
+            }
+
+            throw new \RuntimeException("Invalid middleware handler format");
+        }
+
+        throw new \RuntimeException("Unsupported middleware format");
+    }
 
     public static function setErrorHandler(callable $handler)
     {
@@ -74,6 +121,7 @@ class Route
                 $optional = $m[1] === '?';
                 $name     = $m[2];
                 $pattern  = $m[3] ?? '[^/]+';
+                
                 if ($optional) {
                     return "(?:/(?P<$name>$pattern))?";
                 }
@@ -99,6 +147,7 @@ class Route
     public static function patch(string $path, callable|array $handler, array $middlewares = [])  { self::add('PATCH', $path, $handler, $middlewares); }
     public static function delete(string $path, callable|array $handler, array $middlewares = []) { self::add('DELETE', $path, $handler, $middlewares); }
     public static function options(string $path, callable|array $handler, array $middlewares = []){ self::add('OPTIONS', $path, $handler, $middlewares); }
+    
     public static function any(string $path, callable|array $handler, array $middlewares = [])
     {
         $all = ['GET','POST','PUT','PATCH','DELETE','OPTIONS'];
@@ -143,30 +192,37 @@ class Route
             foreach (self::$routes as $route) {
                 if (!in_array($method, $route['methods'])) continue;
                 if (!preg_match($route['regex'], self::normalizeUri($uri), $matches)) continue;
+                
                 $params = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
                 foreach ($params as $k => $v) {
                     $req = $req->withAttribute($k, $v);
                 }
+
                 foreach ($route['middlewares'] as $middleware) {
-                    $result = $middleware($req, $res);
-                    if ($result === false) return;
+                    $result = self::executeMiddlewareWithRequest($middleware, $req, $res);
+                    if ($result['stop']) {
+                        return;
+                    }
+                    $req = $result['request'];
                 }
+
                 $handler = $route['handler'];
                 if (is_callable($handler)) {
                     $handler($req, $res);
                 } elseif (is_array($handler) && count($handler) === 2) {
                     [$controller, $methodName] = $handler;
-                    $instance = new $controller();
+                    $instance = is_object($controller) ? $controller : new $controller();
                     if (method_exists($instance, $methodName)) {
                         $instance->$methodName($req, $res);
                     } else {
-                        throw new \RuntimeException("Method $methodName not found in controller $controller");
+                        throw new \RuntimeException("Method $methodName not found in controller " . get_class($instance));
                     }
                 } else {
                     throw new \RuntimeException("Invalid handler for route {$route['path']}");
                 }
                 exit;
             }
+
             if (self::$notFoundHandler) {
                 call_user_func(self::$notFoundHandler, $req, $res);
             } else {
